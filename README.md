@@ -17,9 +17,9 @@
 
 1. **Mergi pe**: http://www.plantuml.com/plantuml/uml/
 
-2. **Copiază tot continutul** din fifierul `arhitectura_sistem.puml`
+2. **Copiaza tot continutul** din fisierul `arhitectura_sistem.puml`
 
-3. **Lipește în editor**
+3. **Paste in editor**
 
 4. **Click pe "Submit"** - diagrama se generează automat
 
@@ -56,7 +56,7 @@ Poti modifica în fisierul `.puml`:
 **Graficele arata urat**
 → Instaleaza Graphviz: https://graphviz.org/download/
 
-**Preview nu se încarcă în VS Code**
+**Preview nu se încarca în VS Code**
 → `Ctrl+Shift+P` -> "PlantUML: Preview Current Diagram"
 
 
