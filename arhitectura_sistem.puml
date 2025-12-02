@@ -1,0 +1,188 @@
+@startuml arhitectura_sistem
+skinparam componentStyle rectangle
+skinparam backgroundColor #FEFEFE
+skinparam component {
+    BackgroundColor<<hardware>> #E3F2FD
+    BackgroundColor<<software>> #E8F5E9
+    BackgroundColor<<interface>> #FFF9C4
+    BorderColor #424242
+    FontSize 12
+    FontName Arial
+}
+
+skinparam note {
+    BackgroundColor #FFFACD
+    BorderColor #8B4513
+    FontSize 10
+}
+
+title Arhitectura Sistemului Ciber-Fizic\nRobot Mobil cu Monitorizare IoT în Timp Real
+
+' ============= DISPOZITIV FIZIC =============
+package "Dispozitiv Fizic (Hardware)" <<hardware>> {
+    component [Motoare DC\n(2x Acționări)] as motors
+    component [Encodere\nIncrementale\n(Pulse Counter)] as encoders
+    component [Senzor Inerțial\nIMU (Giroscop +\nAccelerometru)] as imu
+    component [Arduino\nMicrocontroller\n(ATmega328P)] as arduino
+    
+    motors -[hidden]down- encoders
+    encoders -[hidden]down- imu
+}
+
+' ============= GATEWAY LOCAL =============
+package "Gateway Local (Python Application)" <<software>> {
+    component [Parser\nDate Seriale] as parser
+    component [Validator\nDate] as validator
+    component [Aplicație Web\nFlask/FastAPI] as gateway
+    component [REST API\nServer] as rest
+    component [Bază de Date\nSQLite/JSON] as db
+    component [Logger\nSistem] as logger
+}
+
+' ============= INTERFAȚĂ WEB =============
+package "Interfață Web (Client-Side)" <<interface>> {
+    component [Frontend\nHTML5/CSS3] as frontend
+    component [Controller\nJavaScript] as jscontroller
+    component [Grafice Interactive\nChart.js/Plotly] as charts
+    component [Dashboard\nMonitorizare\nTimpReal] as dashboard
+}
+
+' ============= CONEXIUNI HARDWARE =============
+motors <-up-> arduino : "Control PWM\n(0-255)\n1-2 kHz"
+encoders -up-> arduino : "Counting Pulses\nQuadrature Encoding"
+imu -up-> arduino : "I2C/SPI\nDate Inerțiale\n(θ, ω, a)"
+
+' ============= CONEXIUNI SERIAL =============
+arduino -right-> parser : "**USB Serial**\n9600-115200 baud\nJSON Protocol\n~50 Hz"
+
+' ============= CONEXIUNI GATEWAY =============
+parser -down-> validator : "Raw Data\nStream"
+validator -right-> gateway : "Validated\nData"
+gateway -down-> rest : "Expune\nEndpoint-uri"
+gateway -down-> db : "Persistență\nDate Istorice"
+gateway -down-> logger : "Log Eventi\nși Erori"
+
+' ============= CONEXIUNI WEB =============
+rest -right-> jscontroller : "**HTTP/REST**\nGET/POST\nJSON Response\n~1-2 Hz"
+jscontroller -down-> frontend : "Actualizare\nInterfață"
+jscontroller -down-> charts : "Feed Date\nPentru Grafice"
+charts -down-> dashboard : "Render\nVizualizări"
+
+' ============= NOTE EXPLICATIVE =============
+
+note right of arduino
+  **Microcontroller: Arduino Uno/Mega**
+  
+  **Frecvență eșantionare:**
+  • Ts = 20-50 ms (20-50 Hz)
+  
+  **Date transmise (JSON):**
+  {
+    "t": timestamp,
+    "theta": unghi [grade],
+    "omega": turații [RPM],
+    "pos": poziții encodere,
+    "ref": setpoint [grade],
+    "u": comandă PWM [0-255],
+    "e": eroare [grade]
+  }
+  
+  **Algoritm control:**
+  • Regulator PID discret
+  • Anti-windup integrator
+  • Limitare saturație
+end note
+
+note bottom of gateway
+  **Server local: localhost:5000**
+  
+  **Servicii REST disponibile:**
+  • GET  /api/data/latest
+  • GET  /api/data/history?start=X&end=Y
+  • POST /api/control/setpoint
+  • GET  /api/status
+  • GET  /api/config
+  • POST /api/config/update
+  
+  **Format răspuns:** JSON
+  **Autentificare:** Opțională (token-based)
+end note
+
+note right of dashboard
+  **Frecvență actualizare UI:**
+  • Timp real: 1-2 Hz (500-1000 ms)
+  
+  **Vizualizări disponibile:**
+  • Grafic timp real (ultimele 100 puncte)
+  • Grafic istoric (interval selectabil)
+  • Indicatori performanță (KPI):
+    - Timp de stabilizare [s]
+    - Overshoot [%]
+    - Eroare staționară [grade]
+    - Eroare RMS
+  
+  **Export date:**
+  • CSV, JSON, Excel
+end note
+
+note left of motors
+  **Specificații Motoare:**
+  • Tensiune: 6-12V DC
+  • Curent max: 2A/motor
+  • Raport reducție: 1:50
+  • Turații max: 200 RPM
+  
+  **Driver: L298N sau TB6612FNG**
+end note
+
+note left of imu
+  **Senzor: MPU6050 sau MPU9250**
+  
+  **Măsurători:**
+  • Accelerație: ±2g to ±16g
+  • Giroscop: ±250°/s to ±2000°/s
+  • Frecvență sampling: 100 Hz
+  
+  **Comunicație:** I2C (400 kHz)
+  **Filtrare:** Complementary filter
+end note
+
+note bottom of db
+  **Schema bază de date:**
+  
+  **Tabel: measurements**
+  • id: INTEGER PRIMARY KEY
+  • timestamp: DATETIME
+  • theta: REAL (unghi)
+  • reference: REAL (setpoint)
+  • control_signal: REAL (PWM)
+  • error: REAL
+  • rpm_left: REAL
+  • rpm_right: REAL
+  
+  **Index:** pe timestamp
+  **Retenție:** 30 zile (configurabil)
+  **Backup:** zilnic, automat
+end note
+
+' ============= LATENȚE ȘI PERFORMANȚĂ =============
+note as latency
+  **Latențe în sistem:**
+  
+  Arduino → Serial: < 1 ms
+  Serial → Parser: 1-5 ms
+  Parser → Gateway: < 1 ms
+  Gateway → REST API: < 1 ms
+  API → Frontend: 10-50 ms (HTTP/network)
+  Frontend → Render: 5-20 ms
+  
+  **Latență totală end-to-end:**
+  ~20-80 ms (accept pentru monitoring)
+  
+  **Bucla de control (critică):**
+  Local pe Arduino, determinist: 20-50 ms
+end note
+
+latency -[hidden]- gateway
+
+@enduml
