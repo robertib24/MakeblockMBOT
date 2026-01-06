@@ -61,6 +61,10 @@ double CompAngleX = 0;
 double GyroXangle = 0;
 double angle_speed = 0;
 
+// Global variables to track actual PWM commands
+int g_pwm_left = 0;
+int g_pwm_right = 0;
+
 // PRBS Generator Class
 class PRBSGenerator
 {
@@ -143,8 +147,12 @@ void move(int direction, int speed)
         rightSpeed = -speed;
     }
 
-    Encoder_1.setMotorPwm(-leftSpeed);
-    Encoder_2.setMotorPwm(rightSpeed);
+    // Store actual PWM values for logging
+    g_pwm_left = -leftSpeed;
+    g_pwm_right = rightSpeed;
+
+    Encoder_1.setMotorPwm(g_pwm_left);
+    Encoder_2.setMotorPwm(g_pwm_right);
 }
 
 // PID angle compute (simplified from control.cpp)
@@ -229,9 +237,13 @@ void motor_test()
     // Update gyro for angle reading
     gyro.fast_update();
 
+    // Store actual PWM values for logging
+    g_pwm_left = -pwm_command;
+    g_pwm_right = pwm_command;
+
     // Apply directly to motors
-    Encoder_1.setMotorPwm(-pwm_command);
-    Encoder_2.setMotorPwm(pwm_command);
+    Encoder_1.setMotorPwm(g_pwm_left);
+    Encoder_2.setMotorPwm(g_pwm_right);
 }
 
 // Balance test with PRBS excitation
@@ -259,17 +271,14 @@ void log_data()
     double angleX = gyro.getAngleX();
     double gyroY = gyro.getGyroY();
 
-    int pwm_left = (int)Encoder_1.getCurrentSpeed(); // Approximation
-    int pwm_right = (int)Encoder_2.getCurrentSpeed();
-
     // CSV: time,phase,pwm_left,pwm_right,speed_1,speed_2,angleX,gyroY
     Serial.print(time_s, 2);
     Serial.print(",");
     Serial.print((int)current_phase);
     Serial.print(",");
-    Serial.print(pwm_left);
+    Serial.print(g_pwm_left);
     Serial.print(",");
-    Serial.print(pwm_right);
+    Serial.print(g_pwm_right);
     Serial.print(",");
     Serial.print(speed_1, 2);
     Serial.print(",");
@@ -393,6 +402,8 @@ void loop()
         if (millis() - phase_start_time > BALANCE_TEST_DURATION)
         {
             current_phase = PHASE_COMPLETE;
+            g_pwm_left = 0;
+            g_pwm_right = 0;
             Encoder_1.setMotorPwm(0);
             Encoder_2.setMotorPwm(0);
             Serial.println("# TEST COMPLETE");
@@ -400,6 +411,8 @@ void loop()
         break;
 
     case PHASE_COMPLETE:
+        g_pwm_left = 0;
+        g_pwm_right = 0;
         Encoder_1.setMotorPwm(0);
         Encoder_2.setMotorPwm(0);
         return;
@@ -413,7 +426,10 @@ void loop()
     // Emergency stop after 65 seconds
     if (total_elapsed > 65000)
     {
-        move(1, 0);
+        g_pwm_left = 0;
+        g_pwm_right = 0;
+        Encoder_1.setMotorPwm(0);
+        Encoder_2.setMotorPwm(0);
         current_phase = PHASE_COMPLETE;
     }
 }
