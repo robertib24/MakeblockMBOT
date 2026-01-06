@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mBot IoT Gateway - Real-Time Monitoring</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🤖 mBot IoT Gateway</h1>
+            <p class="subtitle">Real-Time System Identification & Monitoring</p>
+        </header>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">Connection:</span>
+                <span id="connectionStatus" class="status-value status-disconnected">Disconnected</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Data Points:</span>
+                <span id="dataPoints" class="status-value">0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Last Update:</span>
+                <span id="lastUpdate" class="status-value">Never</span>
+            </div>
+            <div class="status-item">
+                <button id="startBtn" class="btn btn-start">Start Experiment</button>
+                <button id="exportBtn" class="btn btn-export">Export CSV</button>
+            </div>
+        </div>
+
+        <!-- Current Values Dashboard -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>⚡ PWM Commands</h3>
+                <div class="value-display">
+                    <div class="value-item">
+                        <span class="value-label">Left:</span>
+                        <span id="pwmLeft" class="value-number">0</span>
+                    </div>
+                    <div class="value-item">
+                        <span class="value-label">Right:</span>
+                        <span id="pwmRight" class="value-number">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🏎️ Motor Speed</h3>
+                <div class="value-display">
+                    <div class="value-item">
+                        <span class="value-label">Motor 1:</span>
+                        <span id="speed1" class="value-number">0.00</span>
+                        <span class="unit">units/s</span>
+                    </div>
+                    <div class="value-item">
+                        <span class="value-label">Motor 2:</span>
+                        <span id="speed2" class="value-number">0.00</span>
+                        <span class="unit">units/s</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📐 Angle & Gyro</h3>
+                <div class="value-display">
+                    <div class="value-item">
+                        <span class="value-label">Angle X:</span>
+                        <span id="angleX" class="value-number">0.00</span>
+                        <span class="unit">°</span>
+                    </div>
+                    <div class="value-item">
+                        <span class="value-label">Gyro Y:</span>
+                        <span id="gyroY" class="value-number">0.00</span>
+                        <span class="unit">°/s</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🔄 Test Phase</h3>
+                <div class="value-display">
+                    <div class="value-item">
+                        <span class="value-label">Phase:</span>
+                        <span id="phase" class="value-number phase-badge">0</span>
+                    </div>
+                    <div class="value-item">
+                        <span class="value-label">Time:</span>
+                        <span id="timeS" class="value-number">0.00</span>
+                        <span class="unit">s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-container">
+            <div class="chart-card">
+                <h3>PWM Commands (Real-Time)</h3>
+                <canvas id="pwmChart"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3>Motor Speeds (Real-Time)</h3>
+                <canvas id="speedChart"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3>Angle X (Real-Time)</h3>
+                <canvas id="angleChart"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3>Gyro Y (Real-Time)</h3>
+                <canvas id="gyroChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="statistics-section">
+            <div class="card">
+                <h3>📊 Database Statistics</h3>
+                <div id="statistics" class="statistics-grid">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 mBot IoT Gateway | System Identification Platform</p>
+            <p class="footer-info">Powered by Flask, Chart.js & Arduino</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
