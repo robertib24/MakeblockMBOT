@@ -3,13 +3,13 @@
  *
  * Colectează date pentru identificarea:
  * 1. MODEL MOTOR: PWM → Viteză encoder (open-loop)
- * 2. MODEL ANGLE: PWM → Unghi înclinație (closed-loop balancing active)
+ * 2. MODEL ANGLE: Viteză → Unghi înclinație (PRBS excitation)
  *
  * TESTE INCLUSE:
  * - Test 1 (0-30s): Motor step response (open-loop)
- * - Test 2 (30-60s): Angle disturbance rejection (closed-loop)
+ * - Test 2 (30-60s): Balance with PRBS speed reference (closed-loop)
  *
- * OUTPUT CSV: time,pwm_left,pwm_right,speed_1,speed_2,angleX,gyroY
+ * OUTPUT CSV: time,phase,pwm_left,pwm_right,speed_1,speed_2,angleX,gyroY
  */
 
 #include <Arduino.h>
@@ -55,11 +55,53 @@ typedef struct
 
 PID PID_angle, PID_speed, PID_turn;
 
-// Self-balancing parameters (from control.cpp)
+// Self-balancing parameters
 #define RELAX_ANGLE -1.0
 double CompAngleX = 0;
 double GyroXangle = 0;
 double angle_speed = 0;
+
+// Global variables to track actual PWM commands
+int g_pwm_left = 0;
+int g_pwm_right = 0;
+
+// PRBS Generator Class
+class PRBSGenerator
+{
+private:
+    int amplitude;            // ±amplitude for speed setpoint
+    unsigned long dwellTime;  // dwell time in milliseconds
+    unsigned long lastSwitch; // last switch time
+    int currentValue;         // current PRBS value
+
+public:
+    PRBSGenerator(int amp, unsigned long dwell)
+        : amplitude(amp), dwellTime(dwell), lastSwitch(0), currentValue(amp)
+    {
+        randomSeed(analogRead(0)); // Seed random generator
+    }
+
+    int getValue()
+    {
+        unsigned long now = millis();
+        if (now - lastSwitch >= dwellTime)
+        {
+            // Switch to random ±amplitude
+            currentValue = (random(0, 2) == 0) ? -amplitude : amplitude;
+            lastSwitch = now;
+        }
+        return currentValue;
+    }
+
+    void reset()
+    {
+        lastSwitch = millis();
+        currentValue = amplitude;
+    }
+};
+
+// PRBS instance: ±40 speed units, 250ms dwell time
+PRBSGenerator prbs(40, 250);
 
 // Test state machine
 enum TestPhase
@@ -105,8 +147,12 @@ void move(int direction, int speed)
         rightSpeed = -speed;
     }
 
-    Encoder_1.setMotorPwm(-leftSpeed);
-    Encoder_2.setMotorPwm(rightSpeed);
+    // Store actual PWM values for logging
+    g_pwm_left = -leftSpeed;
+    g_pwm_right = rightSpeed;
+
+    Encoder_1.setMotorPwm(g_pwm_left);
+    Encoder_2.setMotorPwm(g_pwm_right);
 }
 
 // PID angle compute (simplified from control.cpp)
@@ -190,27 +236,24 @@ void motor_test()
 
     // Update gyro for angle reading
     gyro.fast_update();
-    
+
+    // Store actual PWM values for logging
+    g_pwm_left = -pwm_command;
+    g_pwm_right = pwm_command;
+
     // Apply directly to motors
-    Encoder_1.setMotorPwm(-pwm_command);
-    Encoder_2.setMotorPwm(pwm_command);
+    Encoder_1.setMotorPwm(g_pwm_left);
+    Encoder_2.setMotorPwm(g_pwm_right);
 }
 
-// Balance test (closed-loop with disturbance)
+// Balance test with PRBS excitation
 void balance_test()
 {
-    unsigned long elapsed = millis() - phase_start_time;
+    // Get PRBS value and apply to speed setpoint
+    int prbs_value = prbs.getValue();
+    PID_speed.Setpoint = (double)prbs_value;
 
-    // Apply speed disturbance every 5 seconds
-    if ((elapsed / 5000) % 2 == 0)
-    {
-        PID_speed.Setpoint = 50.0; // Forward push
-    }
-    else
-    {
-        PID_speed.Setpoint = -50.0; // Backward push
-    }
-
+    // Run cascaded PID control
     balanced_model();
 }
 
@@ -228,17 +271,14 @@ void log_data()
     double angleX = gyro.getAngleX();
     double gyroY = gyro.getGyroY();
 
-    int pwm_left = (int)Encoder_1.getCurrentSpeed(); // Approximation
-    int pwm_right = (int)Encoder_2.getCurrentSpeed();
-
     // CSV: time,phase,pwm_left,pwm_right,speed_1,speed_2,angleX,gyroY
     Serial.print(time_s, 2);
     Serial.print(",");
     Serial.print((int)current_phase);
     Serial.print(",");
-    Serial.print(pwm_left);
+    Serial.print(g_pwm_left);
     Serial.print(",");
-    Serial.print(pwm_right);
+    Serial.print(g_pwm_right);
     Serial.print(",");
     Serial.print(speed_1, 2);
     Serial.print(",");
@@ -293,10 +333,11 @@ void setup()
     PID_turn.D = 0.0;
     PID_turn.Setpoint = 0.0;
 
-    Serial.println("=== SYSTEM IDENTIFICATION TEST ===");
+    Serial.println("=== SYSTEM IDENTIFICATION TEST (PRBS) ===");
     Serial.println("CSV Header: time,phase,pwm_left,pwm_right,speed_1,speed_2,angleX,gyroY");
     Serial.println("Phase 1 (0-30s): Motor open-loop test (WHEELS LIFTED!)");
-    Serial.println("Phase 2 (30-60s): Balance closed-loop test (ON GROUND!)");
+    Serial.println("Phase 2 (30-60s): Balance with PRBS speed reference (ON GROUND!)");
+    Serial.println("PRBS: ±40 speed units, 250ms dwell time");
     Serial.println("READY");
     Serial.println("Waiting for START command from Python...");
 
@@ -329,6 +370,9 @@ void setup()
     test_start_time = millis();
     current_phase = PHASE_MOTOR_TEST;
     phase_start_time = millis();
+
+    // Reset PRBS generator
+    prbs.reset();
 }
 
 void loop()
@@ -348,7 +392,8 @@ void loop()
         {
             current_phase = PHASE_BALANCE_TEST;
             phase_start_time = millis();
-            Serial.println("# Switching to BALANCE TEST");
+            prbs.reset(); // Reset PRBS for Phase 2
+            Serial.println("# Switching to BALANCE TEST with PRBS");
         }
         break;
 
@@ -357,6 +402,8 @@ void loop()
         if (millis() - phase_start_time > BALANCE_TEST_DURATION)
         {
             current_phase = PHASE_COMPLETE;
+            g_pwm_left = 0;
+            g_pwm_right = 0;
             Encoder_1.setMotorPwm(0);
             Encoder_2.setMotorPwm(0);
             Serial.println("# TEST COMPLETE");
@@ -364,6 +411,8 @@ void loop()
         break;
 
     case PHASE_COMPLETE:
+        g_pwm_left = 0;
+        g_pwm_right = 0;
         Encoder_1.setMotorPwm(0);
         Encoder_2.setMotorPwm(0);
         return;
@@ -377,7 +426,10 @@ void loop()
     // Emergency stop after 65 seconds
     if (total_elapsed > 65000)
     {
-        move(1, 0);
+        g_pwm_left = 0;
+        g_pwm_right = 0;
+        Encoder_1.setMotorPwm(0);
+        Encoder_2.setMotorPwm(0);
         current_phase = PHASE_COMPLETE;
     }
 }
